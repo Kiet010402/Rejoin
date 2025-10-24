@@ -26,7 +26,6 @@ ConfigSystem.DefaultConfig = {
     WebhookEnabled = false,
     WebhookUrl = "",
     AutoHideUIEnabled = false,
-    LastPumpkins = 0,
 }
 ConfigSystem.CurrentConfig = {}
 
@@ -71,9 +70,6 @@ local webhookUrl = ConfigSystem.CurrentConfig.WebhookUrl or ""
 
 -- Biến lưu trạng thái Auto Hide UI
 local autoHideUIEnabled = ConfigSystem.CurrentConfig.AutoHideUIEnabled or false
-
--- Biến lưu số Pumpkins trước đó để tính Reward
-local lastPumpkins = ConfigSystem.CurrentConfig.LastPumpkins or 0
 
 -- Lấy tên người chơi
 local playerName = game:GetService("Players").LocalPlayer.Name
@@ -152,32 +148,46 @@ local function sendWebhook()
     local gems = 0
     local pumpkins = 0
     local name = player.Name
+    local rewardText = ""
+    
     pcall(function()
         gems = player._stats.gem_amount.Value or 0
     end)
     pcall(function()
         pumpkins = player._stats._resourcePumkinToken.Value or 0
     end)
-
-    -- Tính Reward Pumpkins
-    local pumpkinReward = pumpkins - lastPumpkins
-    local rewardText = ""
-    if pumpkinReward > 0 then
-        rewardText = "🎃 Pumpkins +" .. formatNumber(pumpkinReward)
-    elseif pumpkinReward < 0 then
-        rewardText = "🎃 Pumpkins " .. formatNumber(pumpkinReward)
-    end
-
-    -- Cập nhật số Pumpkins cuối cùng
-    lastPumpkins = pumpkins
-    ConfigSystem.CurrentConfig.LastPumpkins = lastPumpkins
-    ConfigSystem.SaveConfig()
+    
+    -- Lấy Reward text từ ResourceRewardTotal
+    pcall(function()
+        local rewardGui = player.PlayerGui:FindFirstChild("Waves")
+        if rewardGui then
+            local healthBar = rewardGui:FindFirstChild("HealthBar")
+            if healthBar then
+                local ingameRewards = healthBar:FindFirstChild("IngameRewards")
+                if ingameRewards then
+                    local resourceRewardTotal = ingameRewards:FindFirstChild("ResourceRewardTotal")
+                    if resourceRewardTotal then
+                        local holder = resourceRewardTotal:FindFirstChild("Holder")
+                        if holder then
+                            local main = holder:FindFirstChild("Main")
+                            if main then
+                                local amount = main:FindFirstChild("Amount")
+                                if amount and amount:IsA("TextLabel") then
+                                    rewardText = amount.Text
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end)
 
     -- Tạo danh sách fields
     local fields = {
         {
             name = "👤 Player",
-            value = name,
+            value = "||" .. name .. "||",
             inline = false
         },
         {
@@ -191,12 +201,12 @@ local function sendWebhook()
             inline = false
         }
     }
-
+    
     -- Thêm Reward nếu có
     if rewardText ~= "" then
         table.insert(fields, {
             name = "Reward",
-            value = rewardText,
+            value = "🎃 Pumpkins: " .. rewardText,
             inline = false
         })
     end
