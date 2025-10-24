@@ -26,6 +26,9 @@ ConfigSystem.DefaultConfig = {
     WebhookEnabled = false,
     WebhookUrl = "",
     AutoHideUIEnabled = false,
+    -- Auto Play Settings
+    AutoPlayEnabled = false,
+    TargetWave = 1,
 }
 ConfigSystem.CurrentConfig = {}
 
@@ -71,6 +74,10 @@ local webhookUrl = ConfigSystem.CurrentConfig.WebhookUrl or ""
 -- Biến lưu trạng thái Auto Hide UI
 local autoHideUIEnabled = ConfigSystem.CurrentConfig.AutoHideUIEnabled or false
 
+-- Biến lưu trạng thái Auto Play
+local autoPlayEnabled = ConfigSystem.CurrentConfig.AutoPlayEnabled or false
+local targetWave = ConfigSystem.CurrentConfig.TargetWave or 1
+
 -- Lấy tên người chơi
 local playerName = game:GetService("Players").LocalPlayer.Name
 
@@ -89,12 +96,17 @@ local Window = Fluent:CreateWindow({
 
 -- Tạo Tab Webhook
 local WebhookTab = Window:AddTab({ Title = "Webhook", Icon = "rbxassetid://13311802307" })
+-- Tạo Tab Play
+local PlayTab = Window:AddTab({ Title = "Play", Icon = "rbxassetid://13311802307" })
 -- Tạo Tab Settings
 local SettingsTab = Window:AddTab({ Title = "Settings", Icon = "rbxassetid://13311798537" })
 
 -- Tab Webhook
 -- Section Webhook Settings trong tab Webhook
 local WebhookSection = WebhookTab:AddSection("Webhook Settings")
+-- Tab Play
+-- Section Auto Play trong tab Play
+local AutoPlaySection = PlayTab:AddSection("Auto Play")
 -- Section Script Settings trong tab Settings
 local SettingsSection = SettingsTab:AddSection("Script Settings")
 
@@ -124,6 +136,39 @@ WebhookSection:AddToggle("EnableWebhookToggle", {
             print("Webhook enabled")
         else
             print("Webhook disabled")
+        end
+    end
+})
+
+-- Thêm Input để nhập Wave Target
+AutoPlaySection:AddInput("WaveTargetInput", {
+    Title = "Target Wave",
+    Default = tostring(targetWave),
+    Placeholder = "Nhập wave từ 1-50",
+    Callback = function(val)
+        local wave = tonumber(val) or 1
+        if wave < 1 then wave = 1 end
+        if wave > 50 then wave = 50 end
+        targetWave = wave
+        ConfigSystem.CurrentConfig.TargetWave = targetWave
+        ConfigSystem.SaveConfig()
+        print("Target Wave set:", targetWave)
+    end
+})
+
+-- Thêm Toggle Auto Vote End
+AutoPlaySection:AddToggle("AutoVoteEndToggle", {
+    Title = "Auto Vote End",
+    Description = "Tự động vote end game khi đạt target wave",
+    Default = autoPlayEnabled,
+    Callback = function(enabled)
+        autoPlayEnabled = enabled
+        ConfigSystem.CurrentConfig.AutoPlayEnabled = autoPlayEnabled
+        ConfigSystem.SaveConfig()
+        if autoPlayEnabled then
+            print("Auto Vote End enabled - Target Wave:", targetWave)
+        else
+            print("Auto Vote End disabled")
         end
     end
 })
@@ -282,6 +327,48 @@ if pg:FindFirstChild("ResultsUI") then
     watchResultsUI()
 end
 
+-- Hệ thống Auto Play - Monitor Wave
+local function monitorWave()
+    if not autoPlayEnabled then return end
+    
+    local success, currentWave = pcall(function()
+        return game:GetService("Workspace")._wave_num.Value
+    end)
+    
+    if success and currentWave and currentWave >= targetWave then
+        print("Đã đạt target wave:", currentWave, "- Bắt đầu auto vote end...")
+        
+        -- Bước 1: Force End Game
+        pcall(function()
+            game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("force_end_game"):InvokeServer()
+            print("Đã thực thi force_end_game")
+        end)
+        
+        -- Đợi 1 giây
+        task.wait(1)
+        
+        -- Bước 2: Vote Force End
+        pcall(function()
+            game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("vote_force_end"):InvokeServer()
+            print("Đã thực thi vote_force_end")
+        end)
+        
+        -- Tắt auto play sau khi thực thi
+        autoPlayEnabled = false
+        ConfigSystem.CurrentConfig.AutoPlayEnabled = false
+        ConfigSystem.SaveConfig()
+        print("Auto Vote End đã được tắt sau khi thực thi")
+    end
+end
+
+-- Tự động monitor wave mỗi giây
+task.spawn(function()
+    while true do
+        monitorWave()
+        task.wait(1) -- Check mỗi giây
+    end
+end)
+
 -- Hàm tự động ẩn UI sau 3 giây khi bật
 local function autoHideUI()
     if not Window then return end
@@ -349,7 +436,7 @@ AutoSaveConfig()
 
 -- Thêm event listener để lưu ngay khi thay đổi giá trị
 local function setupSaveEvents()
-    for _, tab in pairs({ MainTab, SettingsTab }) do
+    for _, tab in pairs({ WebhookTab, PlayTab, SettingsTab }) do
         if tab and tab._components then
             for _, element in pairs(tab._components) do
                 if element and element.OnChanged then
