@@ -26,6 +26,7 @@ ConfigSystem.DefaultConfig = {
     WebhookEnabled = false,
     WebhookUrl = "",
     AutoHideUIEnabled = false,
+    LastPumpkins = 0,
 }
 ConfigSystem.CurrentConfig = {}
 
@@ -70,6 +71,9 @@ local webhookUrl = ConfigSystem.CurrentConfig.WebhookUrl or ""
 
 -- Biến lưu trạng thái Auto Hide UI
 local autoHideUIEnabled = ConfigSystem.CurrentConfig.AutoHideUIEnabled or false
+
+-- Biến lưu số Pumpkins trước đó để tính Reward
+local lastPumpkins = ConfigSystem.CurrentConfig.LastPumpkins or 0
 
 -- Lấy tên người chơi
 local playerName = game:GetService("Players").LocalPlayer.Name
@@ -128,6 +132,19 @@ WebhookSection:AddToggle("EnableWebhookToggle", {
     end
 })
 
+-- Hàm format số với dấu chấm
+local function formatNumber(num)
+    local formatted = tostring(num)
+    local k
+    while true do
+        formatted, k = string.gsub(formatted, "^(-?%d+)(%d%d%d)", '%1.%2')
+        if k == 0 then
+            break
+        end
+    end
+    return formatted
+end
+
 -- Hàm gửi webhook về Discord
 local function sendWebhook()
     if not webhookEnabled or webhookUrl == "" then return end
@@ -142,6 +159,48 @@ local function sendWebhook()
         pumpkins = player._stats._resourcePumkinToken.Value or 0
     end)
 
+    -- Tính Reward Pumpkins
+    local pumpkinReward = pumpkins - lastPumpkins
+    local rewardText = ""
+    if pumpkinReward > 0 then
+        rewardText = "🎃 Pumpkins +" .. formatNumber(pumpkinReward)
+    elseif pumpkinReward < 0 then
+        rewardText = "🎃 Pumpkins " .. formatNumber(pumpkinReward)
+    end
+
+    -- Cập nhật số Pumpkins cuối cùng
+    lastPumpkins = pumpkins
+    ConfigSystem.CurrentConfig.LastPumpkins = lastPumpkins
+    ConfigSystem.SaveConfig()
+
+    -- Tạo danh sách fields
+    local fields = {
+        {
+            name = "👤 Player",
+            value = name,
+            inline = false
+        },
+        {
+            name = "💎 Gems",
+            value = formatNumber(gems),
+            inline = false
+        },
+        {
+            name = "🎃 Pumpkins",
+            value = formatNumber(pumpkins),
+            inline = false
+        }
+    }
+
+    -- Thêm Reward nếu có
+    if rewardText ~= "" then
+        table.insert(fields, {
+            name = "Reward",
+            value = rewardText,
+            inline = false
+        })
+    end
+
     -- Tạo embed đẹp
     local data = {
         embeds = {
@@ -149,23 +208,7 @@ local function sendWebhook()
                 title = "Anime Crusaders - Game Results",
                 description = "Kết quả game mới nhất",
                 color = 0x9932CC, -- Màu tím đẹp
-                fields = {
-                    {
-                        name = "👤 Player",
-                        value = "||" .. name .. "||",
-                        inline = true
-                    },
-                    {
-                        name = "💎 Gems",
-                        value = "**" .. tostring(gems) .. "**",
-                        inline = true
-                    },
-                    {
-                        name = "🎃 Pumpkins",
-                        value = "**" .. tostring(pumpkins) .. "**",
-                        inline = true
-                    }
-                },
+                fields = fields,
                 footer = {
                     text = "Kaihon Anime Crusaders",
                     icon_url =
