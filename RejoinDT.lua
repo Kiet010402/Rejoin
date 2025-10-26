@@ -29,6 +29,7 @@ ConfigSystem.DefaultConfig = {
     -- Auto Play Settings
     AutoPlayEnabled = false,
     TargetWave = 1,
+    JoinSpiritEnabled = false,
 }
 ConfigSystem.CurrentConfig = {}
 
@@ -107,6 +108,8 @@ local WebhookSection = WebhookTab:AddSection("Webhook Settings")
 -- Tab Play
 -- Section Auto Play trong tab Play
 local AutoPlaySection = PlayTab:AddSection("Auto Play")
+-- Section Joiner trong tab Play
+local JoinerSection = PlayTab:AddSection("Joiner")
 -- Section Script Settings trong tab Settings
 local SettingsSection = SettingsTab:AddSection("Script Settings")
 
@@ -169,6 +172,30 @@ AutoPlaySection:AddToggle("AutoVoteEndToggle", {
             print("Auto Vote End enabled - Target Wave:", targetWave)
         else
             print("Auto Vote End disabled")
+        end
+    end
+})
+
+-- Thêm Toggle Join Spirit
+local joinSpiritEnabled = ConfigSystem.CurrentConfig.JoinSpiritEnabled or false
+JoinerSection:AddToggle("JoinSpiritToggle", {
+    Title = "Join Spirit",
+    Description = "Tự động tham gia Spirit (dạng bật/tắt)",
+    Default = joinSpiritEnabled,
+    Callback = function(enabled)
+        joinSpiritEnabled = enabled
+        ConfigSystem.CurrentConfig.JoinSpiritEnabled = joinSpiritEnabled
+        ConfigSystem.SaveConfig()
+        if joinSpiritEnabled then
+            print("Join Spirit đã bật")
+            -- Tự động join Event Spirit
+            local args = { "_EVENT_MOB_" }
+            pcall(function()
+                game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_join_lobby"):InvokeServer(unpack(args))
+                print("Đã request join Spirit Event Lobby!")
+            end)
+        else
+            print("Join Spirit đã tắt")
         end
     end
 })
@@ -369,12 +396,12 @@ task.spawn(function()
     end
 end)
 
--- Hàm tự động ẩn UI sau 3 giây khi bật
+-- Hàm tự động ẩn UI sau 10 giây khi bật
 local function autoHideUI()
     if not Window then return end
     task.spawn(function()
-        print("Auto Hide UI: Sẽ tự động ẩn sau 3 giây...")
-        task.wait(3)
+        print("Auto Hide UI: Sẽ tự động ẩn sau 10 giây...")
+        task.wait(10)
         if Window.Minimize then
             Window:Minimize()
             print("UI đã được ẩn!")
